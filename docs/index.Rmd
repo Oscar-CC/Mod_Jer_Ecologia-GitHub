@@ -1,0 +1,20 @@
+---
+title: "Repositorio: Curso de Modelos Jerárquicos aplicados a Ecología"
+author: "Oscar Carmona Castro"
+date: "2025-04-07"
+output: html_document
+---
+
+### **Índice de asignaturas.**
+
+[Asignación 1. Introducción a los Modelos Jerárquicos]()
+
+[Asignación 2.1: N-Mixture Models - Frecuentista]()
+
+[Asignación 2.2: N-Mixture Models - Bayesiano (ubms)]()
+
+[Asignación 3: N-Mixture Models - spAbundance]()
+
+[]()
+
+[]()

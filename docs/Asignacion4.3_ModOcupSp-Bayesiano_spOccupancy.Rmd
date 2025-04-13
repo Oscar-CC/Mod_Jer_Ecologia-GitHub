@@ -1,0 +1,203 @@
+---
+title: "Asignación 4.3: Modelos de ocupacion de especies - Bayesiano (spOccupancy)"
+author: "Oscar Carmona Castro"
+date: "2025-04-11"
+output: html_document
+---
+
+## Ejercicio: Realizar modelos de ocupación de especies (Bayesiano-spOcupancy).
+
+
+# { .tabset}
+
+
+## 1. Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(spOccupancy)
+```
+
+
+## 2. Cargar bases de datos
+```{r}
+ArdillaRoja = readRDS("Datos_EAP/SwissSquirrels.rds")
+```
+
+
+## 3. Preparar formato spOccupancy
+**Variable "y".**
+```{r}
+y = as.matrix(ArdillaRoja[,c("det071", "det072", "det073")])
+```
+
+**Covariables de sitio.**
+```{r}
+site.covs = ArdillaRoja[,c("ele", "forest")]
+```
+
+**Covariables de observación.**
+```{r}
+obs.covs = list(
+    det.cov.1 = as.matrix(ArdillaRoja[,c("date071", "date072", "date073")]),
+    det.cov.2 = as.matrix(ArdillaRoja[,c("dur071", "dur072", "dur073")])
+  )
+               
+```
+
+```{r}
+Ardilla_data = list(y = y,
+                  occ.covs = site.covs,
+                  det.covs = obs.covs)
+```
+
+
+## 4. Ajustar modelo de detección
+```{r}
+ModelDet0 = PGOcc(occ.formula = ~ 1,
+                   det.formula = ~ 1,
+                   data = Ardilla_data,
+                   n.samples = 3000,
+                   n.thin = 5,
+                   n.burn = 300,
+                   n.chains = 3)
+```
+
+```{r}
+ModelDet1 = PGOcc(occ.formula = ~ 1,
+                   det.formula = ~ det.cov.1,
+                   data = Ardilla_data,
+                   n.samples = 3000,
+                   n.thin = 5,
+                   n.burn = 300,
+                   n.chains = 3)
+```
+
+
+## 5. Selección de modelos de detección
+```{r}
+waicOcc(ModelDet0)
+```
+
+```{r}
+waicOcc(ModelDet1)
+```
+
+
+## 6. Ajustar modelo de ocupación
+```{r}
+ModelOccu0 = PGOcc(occ.formula = ~ 1,
+                    det.formula = ~ det.cov.1,
+                    data = Ardilla_data,
+                    n.samples = 3000,
+                    n.thin = 5,
+                    n.burn = 300,
+                    n.chains = 3)
+```
+
+```{r}
+ModelOccu1 = PGOcc(occ.formula = ~ ele,
+                    det.formula = ~ det.cov.1,
+                    data = Ardilla_data,
+                    n.samples = 3000,
+                    n.thin = 5,
+                    n.burn = 300,
+                    n.chains = 3)
+```
+
+```{r}
+ModelOccu2 = PGOcc(occ.formula = ~ forest,
+                    det.formula = ~ det.cov.1,
+                    data = Ardilla_data,
+                    n.samples = 3000,
+                    n.thin = 5,
+                    n.burn = 300,
+                    n.chains = 3)
+```
+
+
+## 7. Selección de modelos de ocupación
+```{r}
+waicOcc(ModelOccu0)
+```
+
+```{r}
+waicOcc(ModelOccu1)
+```
+
+```{r}
+waicOcc(ModelOccu2)
+```
+
+
+## 8. Resumen de los resultados
+```{r}
+summary(ModelOccu2)
+```
+
+
+## 9. Prueba de bondad de ajuste
+```{r}
+plot(ModelOccu2$beta.samples)
+```
+
+```{r}
+plot(ModelOccu2$alpha.samples)
+```
+
+```{r}
+ppc.out.sp = ppcOcc(ModelOccu2, fit.stat = 'freeman-tukey', group = 1)
+summary(ppc.out.sp)
+```
+
+
+## 9. Graficar
+```{r}
+forest.pred = data.frame(forest = seq(min(ArdillaRoja$forest, na.rm = TRUE), 
+                                       max(ArdillaRoja$forest, na.rm = TRUE), 
+                                       length.out = 100))
+```
+
+```{r}
+X.0 = model.matrix(~forest, data = forest.pred)
+```
+
+```{r}
+out.forest = predict(ModelOccu2, X.0 = X.0, type = "occupancy")
+```
+
+```{r}
+psi.0.quants = apply(out.forest$psi.0.samples, 2, quantile, c(0.025, 0.5, 0.975))
+```
+
+First, convert your quantile matrix to a tidy data frame
+```{r}
+psi_df = as.data.frame(t(psi.0.quants)) %>% 
+  tibble::rownames_to_column("forest") %>% 
+  mutate(forest = as.numeric(forest)) %>% 
+  pivot_longer(cols = -forest, names_to = "quantile", values_to = "value") %>% 
+  pivot_wider(names_from = quantile, values_from = value)
+```
+
+Create the plot
+```{r}
+ggplot(psi_df, aes(x = forest)) +
+  geom_ribbon(aes(ymin = `2.5%`, ymax = `97.5%`), 
+              fill = "#4E79A7", alpha = 0.3) +
+  geom_line(aes(y = `50%`), color = "#2E5C8A", linewidth = 1) +
+  labs(
+    x = "Forest cover",
+    y = "Abundance (ψ)",
+    title = "Estimated Abundance",
+    subtitle = "Median with 95% credible intervals"
+  ) +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(color = "gray40"),
+    axis.title = element_text(face = "bold")
+  )
+```
+
+

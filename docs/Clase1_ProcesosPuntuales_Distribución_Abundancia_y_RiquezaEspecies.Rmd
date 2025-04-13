@@ -1,0 +1,53 @@
+---
+title: "Clase 0: Procesos Puntuales, Distribución, Abundancia y Riqueza de especies"
+author: "Oscar Carmona Castro"
+date: "2025-04-01"
+output: html_document
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(AHMbook)
+```
+
+```{r}
+sim.fn(quad.size = 10, cell.size = 1, intensity = 1)
+```
+
+```{r}
+dev.new() +
+  sim.fn(quad.size = 10, cell.size = 1, intensity = 1)
+```
+
+```{r}
+set.seed(82)
+
+tmp = dev.new() +
+  (sim.fn(quad.size = 16, cell.size = 2, intensity = 0.5))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

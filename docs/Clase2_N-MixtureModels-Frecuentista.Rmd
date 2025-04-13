@@ -1,0 +1,212 @@
+---
+title: "Clase 1: N-Mixture Models-Frecuentista"
+author: "Oscar Carmona Castro"
+date: "2025-03-31"
+output: html_document
+---
+
+Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(unmarked)
+library(AICcmodavg)
+library(tidyverse)
+```
+
+Cargar base de datos
+```{r}
+Carbonero = read.csv("Datos_EAP/Tits.csv")
+```
+
+```{r}
+str(Carbonero)
+```
+
+
+Formatear base de datos a unmarked
+
+Variables de interés:
+
+y = abundancia (variable respuesta)
+```{r}
+y = Carbonero [ ,c("X1", "X2", "X3")]
+```
+
+Covariables del sitio
+```{r}
+CovSites = Carbonero [ ,c("forest", "rlength", "elev")]
+```
+
+Covariables de observación
+```{r}
+CovObs = list(Hora = Carbonero[ ,c("time.1", "time.2", "time.3")],
+              Fecha = Carbonero[ ,c("date.1", "date.2", "date.3")],
+              Longitud = Carbonero[ ,c("rlength", "rlength", "rlength")])
+```
+
+Formato unmarked
+```{r}
+Carbonero_umf = unmarkedFramePCount(y = y,
+                                    siteCovs = CovSites,
+                                    obsCovs = CovObs)
+```
+
+```{r}
+summary(Carbonero_umf)
+```
+
+
+Ajustar modelos de detección
+```{r}
+Modelo_nulo = pcount (~1 ~1, mixture = "P", data = Carbonero_umf)
+Modelo_Hora = pcount (~Hora ~1, mixture = "P", data = Carbonero_umf)
+Modelo_Fecha = pcount (~Fecha ~1, mixture = "P", data = Carbonero_umf)
+Modelo_Duracion = pcount (~Longitud ~1, mixture = "P", data = Carbonero_umf)
+```
+
+Crear lista de modelos
+```{r}
+Modelos_det = fitList(Modelo_nulo, Modelo_Hora, Modelo_Fecha, Modelo_Duracion)
+```
+
+Seleccionar modelos de detección
+```{r}
+modSel(Modelos_det)
+```
+
+Otra forma AICtab
+```{r}
+Modelos_det2 = list(Modelo_nulo, Modelo_Hora, Modelo_Fecha, Modelo_Duracion)
+Nombres = c("Nulo", "Hora", "Fecha", "Duracion")
+```
+
+```{r}
+aictab(Modelos_det2, Nombres, second.ord = FALSE)
+```
+
+Solo elegir un criterio para seleccionar modelos.
+
+1. Peso AICWt.
+Todos los modelos que el peso acumulado sea => 70%
+
+2. Valor de Delta (citar referencia)
+Delta < 10
+Delta < 4
+Delta < 2
+
+
+Ajustar modelos de abundancia
+Primera opción:
+```{r}
+Modelos_abundancia1 = fitList(
+  "Nulo" = pcount(~Fecha ~1, mixture = "P", data = Carbonero_umf),
+  "Elevacion" = pcount(~Fecha ~elev, mixture = "P", data = Carbonero_umf),
+  "Bosque" = pcount(~Fecha ~forest, mixture = "P", data = Carbonero_umf),
+  "Bosque2" = pcount(~Fecha ~forest + I(forest^2), mixture = "P", data = Carbonero_umf)
+  
+)
+```
+
+```{r}
+modSel(Modelos_abundancia1)
+```
+
+Segunda opción: aictab
+```{r}
+Modelos_abundancia2 = list(
+  "Nulo" = pcount(~Fecha ~1, mixture = "NB", data = Carbonero_umf),
+  "Elevacion" = pcount(~Fecha ~elev, mixture = "NB", data = Carbonero_umf),
+  "Bosque" = pcount(~Fecha ~forest, mixture = "NB", data = Carbonero_umf),
+  "Bosque2" = pcount(~Fecha ~forest + I(forest^2), mixture = "NB", data = Carbonero_umf)
+  
+)
+```
+
+```{r}
+aictab(Modelos_abundancia2)
+```
+
+# Prueba de bondad de ajuste
+Primera opción
+```{r}
+AICcmodavg::Nmix.gof.test(Modelos_abundancia2$Elevacion)
+
+# compatible con la lista (aictab)
+```
+
+Segunda opción: "ES MEJOR"
+```{r}
+fitstats <- function(Mod_global2) {
+  observed <- getY(Mod_global2@data)
+  expected <- fitted(Mod_global2)
+  resids <- residuals(Mod_global2)
+  sse <- sum(resids^2,na.rm=TRUE)
+  chisq <- sum((observed - expected)^2 / expected,na.rm=TRUE)
+  freeTuke <- sum((sqrt(observed) - sqrt(expected))^2,na.rm=TRUE)
+  out <- c(SSE=sse, Chisq=chisq, freemanTukey=freeTuke)
+  return(out)
+}
+
+(pb <- parboot(Modelos_abundancia2$Elevacion, fitstats, nsim=100, report=1))
+```
+
+
+Preparar tabla para graficar
+```{r}
+Fecha_df = data.frame(Fecha = seq(min(Carbonero$date.1, na.rm = TRUE),
+                                  max(Carbonero$date.3, na.rm = TRUE),
+                                  length = 100))
+```
+
+```{r}
+Fecha_df
+```
+
+```{r}
+Fecha_pre = unmarked::predict(Modelos_abundancia2$Elevacion,
+                              newdata = Fecha_df,
+                              appendData = TRUE,
+                              type = "det")
+
+```
+
+
+```{r}
+Fecha_pre
+```
+
+
+Graficar modelos detección
+```{r}
+ggplot(data = Fecha_pre, aes(x = Fecha, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5,
+              fill = "lightgreen") +
+  theme_classic() +
+  labs(title = "Título",
+       y = "Detección",
+       x = "Fecha ordinal")
+```
+
+Graficar modelos abundancia
+```{r}
+Abundancia_pre = predict(Modelos_abundancia2$Elevacion,
+                         newdata = Carbonero,
+                         appendData = TRUE,
+                         type = "state")
+
+```
+
+```{r}
+ggplot(Abundancia_pre, aes(x = elev, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5,
+              fill = "lightblue") +
+  theme_classic()
+
+```
+
+

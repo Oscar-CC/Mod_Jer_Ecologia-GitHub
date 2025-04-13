@@ -1,7 +1,7 @@
 ---
 title: "Repositorio: Curso de Modelos Jerárquicos aplicados a Ecología"
 author: "Oscar Carmona Castro"
-date: "2025-04-07"
+date: "2025-04-13"
 output: html_document
 ---
 

@@ -1,0 +1,200 @@
+---
+title: "Asignación 2.2: N-Mixture Models - Bayesiano (ubms)"
+author: "Oscar Carmona Castro"
+date: "2025-04-02"
+output: html_document
+---
+
+## Ejercicio: Variable elevación.
+
+
+# { .tabset}
+
+
+## 1. Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ubms)
+library(loo)
+```
+
+## 2. Cargar base de datos
+```{r}
+Carbonero = read.csv("Datos_EAP/Tits.csv")
+```
+
+```{r}
+str(Carbonero)
+```
+
+
+## 3. Formatear base datos: unmarked { .tabset}
+### 3.1 Variables de interés
+
+y = abundancia (variable respuesta)
+```{r}
+y = Carbonero [ ,c("X1", "X2", "X3")]
+```
+
+Covariables del sitio
+```{r}
+CovSites = Carbonero [ ,c("forest", "rlength", "elev")]
+```
+
+Covariables de observación
+```{r}
+CovObs = list(Hora = Carbonero[ ,c("time.1", "time.2", "time.3")],
+              Fecha = Carbonero[ ,c("date.1", "date.2", "date.3")],
+              Longitud = Carbonero[ ,c("rlength", "rlength", "rlength")])
+```
+
+### 3.2 Formato unmarked
+```{r}
+Carbonero_umf = unmarkedFramePCount(y = y,
+                                    siteCovs = CovSites,
+                                    obsCovs = CovObs)
+```
+
+```{r}
+summary(Carbonero_umf)
+```
+
+
+## 4. Modelos de detección { .tabset}
+### 4.1 Ajuste y selección de modelos: "WAIC"
+```{r}
+Modelo_det_nulo = stan_pcount(~1 ~1, data = Carbonero_umf,
+                              chains = 3,
+                              iter = 300,
+                              warmup = 30,
+                              mixture = "P")
+```
+
+```{r}
+Modelo_det_Fecha = stan_pcount(~Fecha ~1, data = Carbonero_umf,
+                              chains = 3,
+                              iter = 300,
+                              warmup = 30,
+                              mixture = "P")
+```
+
+
+**Seleccinar modelos de detección: WAIC**
+```{r}
+waic_nulo = ubms::waic(Modelo_det_nulo)
+```
+
+```{r}
+waic_fecha = ubms::waic(Modelo_det_Fecha)
+```
+
+
+**Comparar con: "loo".**
+```{r}
+library(loo)
+```
+
+```{r}
+loo_compare(waic_nulo, waic_fecha)
+```
+
+
+**Otra forma de comparar.**
+```{r}
+ubms::loo(Modelo_det_nulo)
+```
+
+```{r}
+ubms::loo(Modelo_det_Fecha)
+```
+
+
+**Otra forma de ver ajuste modelo**
+Rhat: variable de ajuste.
+* Rhat = 1 (ajuste perfecto)
+* Rhat > 1.05 (mal ajuste, se corrije aumentando no. iteraciones)
+
+```{r}
+Modelo_det_nulo
+```
+
+```{r}
+Modelo_det_Fecha
+
+```
+
+
+## 5. Modelos de abundancia { .tabset}
+### 5.1 Ajustar modelos de abundancia
+```{r}
+Modelo_elevacion = stan_pcount(~Fecha ~elev, data = Carbonero_umf,
+                              chains = 3,
+                              iter = 300,
+                              warmup = 30,
+                              mixture = "P")
+```
+
+
+### 5.2 Validación de modelos de abundancia
+**Diagnóstico visual de las cadenas MCMC**
+```{r}
+ubms::traceplot(Modelo_elevacion)
+```
+
+**R-hat**
+```{r}
+Modelo_elevacion
+```
+
+**loo**
+```{r}
+ubms::loo(Modelo_elevacion)
+```
+
+
+## 6 Gráficos { .tabset}
+### 6.1 Preparar tabla para graficar
+```{r}
+Elevacion_df = data.frame(elev= seq(min(0), max(2750),
+                                    length =100))
+```
+
+```{r}
+Prediccion_df = ubms::predict(Modelo_elevacion,
+                              submodel = "state",
+                              newdata = Elevacion_df)
+                              
+```
+
+```{r}
+Prediccion_df$Elevacion = Elevacion_df$elev
+```
+
+```{r}
+head(Prediccion_df)
+```
+
+
+### 6.2. Gráfico de abundancia
+```{r}
+Prediccion_df |>
+  rename("lower" = `2.5%`,
+         "upper" = `97.5%`) |>
+  ggplot(aes(x = Elevacion, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.4, fill = "lightblue") +
+  theme_classic()
+```
+
+**Guardar gráfico**
+```{r}
+ggsave("Resultados/Grafico1.png",
+       plot = last_plot(),
+       units = "cm", height = 8, width = 12, dpi = 350)
+```
+
+
+
+

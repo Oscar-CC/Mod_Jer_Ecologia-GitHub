@@ -1,0 +1,165 @@
+---
+title: "Asignación 1: Introducción a Modelos Jerárquicos"
+author: "Oscar Carmona Castro"
+date: "2025-04-01"
+output: html_document
+---
+
+## Ejercicio
+
+
+# { .tabset}
+## 1. Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(unmarked)
+library(jagsUI)
+library(MuMIn)
+library(AICcmodavg)
+```
+
+
+## 2. Ejecutar comandos
+```{r}
+library(unmarked)
+
+set.seed(35)
+nSites <- 100
+nVisits <- 3
+x <- rnorm(nSites)               # a covariate
+beta0 <- 0
+beta1 <- 1
+lambda <- exp(beta0 + beta1*x)   # expected counts at each site
+N <- rpois(nSites, lambda)       # latent abundance
+y <- matrix(NA, nSites, nVisits)
+p <- c(0.3, 0.6, 0.8)            # detection prob for each visit
+for(j in 1:nVisits) {
+  y[,j] <- rbinom(nSites, N, p[j])
+  }
+
+# Organize data
+visitMat <- matrix(as.character(1:nVisits), nSites, nVisits, byrow=TRUE)
+
+umf <- unmarkedFramePCount(y=y, siteCovs=data.frame(x=x),
+    obsCovs=list(visit=visitMat))
+summary(umf)
+
+# Fit a model
+fm1 <- pcount(~visit-1 ~ x, umf, K=50)
+fm1
+```
+
+```{r}
+plogis(coef(fm1, type="det")) # Should be close to p
+```
+
+## 3. Ejecutar siguiente comando
+```{r}
+library(jagsUI)
+
+#Load data (built into R)
+  
+data(longley)
+head(longley)
+  
+#Separate data objects
+  
+gnp <- longley$GNP
+employed <- longley$Employed
+n <- length(employed)
+
+#Input data objects must be numeric, and must be
+#scalars, vectors, matrices, or arrays.
+  
+#Package together
+data <- list(gnp=gnp,employed=employed,n=n)
+    
+######################################
+##      2. Write model file         ##
+######################################
+
+#Write a model in the BUGS language
+
+#Generate model file directly in R
+#(could also read in existing model file)
+
+#Identify filepath of model file
+modfile <- tempfile()
+
+#Write model to file
+writeLines("
+model{
+
+  #Likelihood
+  for (i in 1:n){ 
+
+    employed[i] ~ dnorm(mu[i], tau)     
+    mu[i] <- alpha + beta*gnp[i]
+
+  }
+    
+  #Priors
+  alpha ~ dnorm(0, 0.00001)
+  beta ~ dnorm(0, 0.00001)
+  sigma ~ dunif(0,1000)
+  tau <- pow(sigma,-2)
+
+}
+", con=modfile)
+  
+######################################
+##    3. Initialize Parameters      ##
+######################################
+  
+#Best to generate initial values using function
+
+inits <- function(){  
+  list(alpha=rnorm(1,0,1),beta=rnorm(1,0,1),sigma=runif(1,0,3))  
+}
+  
+#In many cases, JAGS can pick initial values automatically;
+#you can leave argument inits=NULL to allow this.
+
+######################################
+##  4. Set parameters to monitor    ##
+######################################
+
+#Choose parameters you want to save output for
+#Only parameters in this list will appear in output object
+#(deviance is added automatically if DIC=TRUE)
+
+#List must be specified as a character vector
+
+params <- c('alpha','beta','sigma')
+
+######################################
+##        5. Run Analysis           ##
+######################################
+
+#Call jags function; specify number of chains, number of adaptive iterations,
+#the length of the burn-in period, total iterations, and the thin rate.
+
+out <- jags(data = data,
+            inits = inits,
+            parameters.to.save = params,
+            model.file = modfile,
+            n.chains = 3,
+            n.adapt = 100,
+            n.iter = 1000,
+            n.burnin = 500,
+            n.thin = 2)
+
+#Arguments will be passed to JAGS; you will see progress bars
+#and other information
+
+#Examine output summary
+```
+
+```{r}
+out
+```
+
+
+
+
+
+

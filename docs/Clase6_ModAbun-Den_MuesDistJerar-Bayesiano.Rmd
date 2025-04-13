@@ -1,0 +1,236 @@
+---
+title: "Clase 6: Modelos de abundancia y densidad con muestreo de distancia jerárquico - Bayesiano"
+author: "Oscar Carmona Castro"
+date: "2025-04-07"
+output: html_document
+---
+
+# Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(ubms)
+library(tidyverse)
+library(readxl)
+```
+
+
+# Cargar base de datos
+
+```{r}
+Aves = read_xlsx("Datos_EAP/Transectos.xlsx", sheet = 2)
+```
+
+```{r}
+Aves2 = read.delim("Datos_EAP/Transectos.txt")
+```
+
+```{r}
+Paisaje = readRDS("Datos_EAP/Paisaje250.rds")
+```
+
+
+# Depurar base de datos
+```{r}
+Aves_depurada = Aves2 |> 
+  mutate(Punto_Inicial = recode(Punto_Inicial, "Bosque" = "DAIB",
+                                "Cafetal" = "DAIC")) |>
+  mutate(Fecha_ord = dmy(Fecha)) |>
+  mutate(Fecha_ord = yday(Fecha_ord)) |>
+  mutate(Observador = recode(Observador, "CAAF y MAPD" = "AP")) |>
+  filter(Deteccion == "Visual")
+  
+```
+
+
+# Pasar de formato largo a formato ancho
+Primero "group by" con variables que quiero mantener.
+```{r}
+Aves_depurada2 = Aves_depurada |>
+  group_by(Sitio, Punto_Inicial, Fecha, Fecha_ord, Visita, Hora_I,
+           Distancia, Observador, Especie) |>
+  
+  summarise(Abundancia = n()) |> # calcular abundancia
+  pivot_wider(names_from = "Especie",
+              values_from = "Abundancia",
+              values_fill = 0) |>
+  select(Sitio, Distancia, Hora_I, Fecha, Fecha_ord, Observador,
+         Visita, CARPUS, SETCIT, SETVIR, TROAED, BASCUL, MIOOLE,
+         SETPET, BASRUF, MNIVAR, OREPER, MYOMIN, SETPEN, SETRUT,
+         VERCHR, VERCYA) |> # Seleccionar especies insectivoras y variables de interés
+  mutate(Franja = cut(Distancia,
+                      breaks = c(0, 10, 20, 30, 40, 50, 60, 70, 80,
+                                 90, 100), 
+                      labels = c("Level1", "Level2", "Level3",
+                                 "Level4", "Level5", "Level6",
+                                 "Level7", "Level8", "Level9",
+                                 "Level10" ) )) |>
+  mutate(Abundancia = rowSums(across(c(CARPUS:VERCYA)))) # sumar columnas
+  
+```
+
+Cambiar NA a "0"
+```{r}
+Aves_depurada3 = Aves_depurada2 |>
+  filter(!is.na(Franja)) |>
+  pivot_wider(names_from = Franja, values_from = Abundancia,
+              values_fill = 0) |>
+  ungroup() |>
+  select(Sitio, Fecha_ord, Visita, Observador, Hora_I,
+         Level1, Level2, Level3, Level4, Level5, Level6, 
+         Level7, Level8) |>
+  group_by(Sitio, Fecha_ord, Visita, Observador) |>
+  summarise(Level1 = max(Level1), Level2 = max(Level2),
+            Level3 = max(Level3), Level4 = max(Level4),
+            Level5 = max(Level5), Level6 = max(Level6),
+            Level7 = max(Level7), Level8 = max(Level8)) |>
+  ungroup()
+                         
+```
+
+
+# Unir tablas Aves + Paisaje 
+**último paso.**
+```{r}
+Aves_final = Aves_depurada3 |>
+  rename(Site_ID = Sitio) |>
+  left_join(Paisaje, by = "Site_ID") |>
+  filter(!is.na(Forest))
+```
+
+```{r}
+head(Aves_final)
+```
+
+
+# Cambiar a formato unmarked
+**Variable "y".**
+```{r}
+y = cbind(Aves_final$Level1,
+          Aves_final$Level2,
+          Aves_final$Level3,
+          Aves_final$Level4,
+          Aves_final$Level5)
+
+```
+
+
+
+# **Escalar tabla: Forest** (NO NECESARIO)
+```{r}
+Aves_final$Forest_esc = scale(Aves_final$Forest)
+```
+
+
+# **Covariables de sitio.** (TRABAJAR CON ESTO)
+```{r}
+Site_covs = Aves_final[ ,c("Site_ID", "Fecha_ord", "Visita",
+                           "Observador", "Forest", "Coffee")]
+```
+
+
+# **Con forest escalado** (NO NECESARIO)
+```{r}
+Site_covs_esc = Aves_final[ ,c("Site_ID", "Fecha_ord", "Visita",
+                           "Observador", "Forest_esc", "Coffee")]
+```
+
+
+```{r}
+Aves_final$Longitud = 100
+```
+
+**Crear unmarked.**
+```{r}
+Aves_umf = unmarkedFrameDS(y = y,
+                           siteCovs =  Site_covs,
+                           dist.breaks = c(0, 10, 20, 30, 40,
+                                           50),
+                           survey = "line",
+                           unitsIn = "m",
+                           tlength = Aves_final$Longitud)
+```
+
+```{r}
+summary(Aves_umf)
+```
+
+
+# Ajustar modelo
+```{r}
+fm1 = stan_distsamp(~Observador ~Forest + (1|Site_ID) +
+                      (1|Visita),
+                    Aves_umf, output = "density",
+                    unitsOut = "ha",
+                    chains = 3,
+                    iter = 300,
+                    warmup = 30)
+```
+
+```{r}
+fm1
+```
+
+
+```{r}
+plogis(2.2704)
+```
+
+```{r}
+plogis()
+```
+
+
+
+
+# FALTAN PASOS DESDE AJUSTAR MODELOS.
+# Clase 6: Modelos de densidad con muestreo de distancia jerárquico - Frecuentista (ver script).
+
+
+
+
+
+
+# Graficar variable categórica
+**1o. Crear una nueva tabla**
+```{r}
+Observador_df = data.frame(Observador = c("AP", "DM"))
+```
+
+```{r}
+Observador_df
+```
+
+
+```{r}
+Observador_pre = predict(fm1, submodel = "det",
+                         newdata = Observador_df,
+                         transform = TRUE)
+
+Observador_pre$Observador = Observador_df$Observador
+Observador_pre
+```
+
+
+# Graficar
+```{r}
+ggplot(Observador_pre, aes(x = Observador, y = Predicted)) +
+  geom_col() +
+  geom_errorbar(aes(ymin = `2.5%`,
+                    ymax =`97.5%`)) 
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

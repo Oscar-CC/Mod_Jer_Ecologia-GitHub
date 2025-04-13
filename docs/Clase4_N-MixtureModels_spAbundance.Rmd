@@ -1,0 +1,208 @@
+---
+title: "Clase 2_N-MixtureModels_spAbundance"
+author: "Oscar Carmona Castro"
+date: "2025-04-03"
+output: html_document
+---
+
+n.bacth + falta algo aquí = 40,000 iter
+burn 10%
+
+
+# Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(spAbundance)
+library(tidyverse)
+
+# optimiza mejor los procesos. Carga más rápido los modelos.
+```
+
+
+# Cargar base de datos
+```{r}
+Carbonero = read.csv("Datos_EAP/Tits.csv")
+```
+
+```{r}
+str(Carbonero)
+```
+
+
+# Formatear base de datos: spAbundance
+
+Crear matriz para variable "y"
+```{r}
+y = as.matrix(Carbonero[ , c("X1", "X2", "X3")])
+```
+
+Covariables de sitio
+```{r}
+Site_covs = Carbonero[ , c("forest", "elev")]
+```
+
+Covariables de observación
+```{r}
+Obs_covs = list(det.cov.1 = as.matrix(Carbonero[ , c("time.1", "time.2", "time.3")]),
+                det.cov.2 = as.matrix(Carbonero[ , c("date.1", "date.2", "date.3")]),
+                det.cov.2 = as.matrix(Carbonero[ , c("dur.1", "dur.2", "dur.3")]))
+                
+```
+
+```{r}
+Carbonero_data = list(y = y,
+                       abund.covs = Site_covs,
+                       det.covs = Obs_covs)
+
+```
+
+```{r}
+Carbonero_data
+```
+
+```{r}
+View(Carbonero_data)
+```
+
+
+# Configurar Cadenas Montecarlo: MCMC
+```{r}
+n_chains = 3
+n_burn = 500
+n_thin = 5
+n_iter = 5000
+```
+
+
+# Ajustar modelos de detección
+**Modelo nulo**
+```{r}
+modelo_det_nulo = NMix(abund.formula = ~1,
+                       det.formula = ~1,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+**Seleccionamos una variable detección para ejemplo: Fecha (det.cov.2)**
+```{r}
+modelo_det_fecha = NMix(abund.formula = ~1,
+                       det.formula = ~det.cov.2,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+# Selección de modelos: waic
+**Entre menor sea el valor, el modelo es mejor.**
+```{r}
+waicAbund(modelo_det_nulo)
+```
+
+```{r}
+waicAbund(modelo_det_fecha)
+```
+
+
+# Modelo de abundancia
+## Ajuste
+```{r}
+modelo_abun_nulo = NMix(abund.formula = ~1,
+                       det.formula = ~det.cov.2,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+```{r}
+modelo_abun_forest = NMix(abund.formula = ~forest,
+                       det.formula = ~det.cov.2,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+
+```{r}
+waicAbund(modelo_abun_nulo)
+```
+
+```{r}
+waicAbund(modelo_abun_forest)
+```
+
+
+# Resumen resultados
+```{r}
+summary(modelo_abun_forest)
+```
+
+
+# Diagnosticar la convergencia
+```{r}
+plot(modelo_abun_forest$beta.samples)
+```
+
+```{r}
+plot(modelo_abun_forest$alpha.samples)
+```
+
+```{r}
+Ajuste_test = ppcAbund(modelo_abun_forest, fit.stat = "freeman-tukey", group = 1)
+```
+
+```{r}
+summary(Ajuste_test)
+```
+
+# Un modelo es adecuado cuando:
+Rhat < 1.05
+Gráficos
+p-Bayesiano > 0.05
+
+
+Si falla alguno de ellos, no se justifica entregar esos resultados.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

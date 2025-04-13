@@ -1,0 +1,362 @@
+---
+title: "Clase 9: Modelos de interacción entre especies o Modelos de ocupación de múltiples especies - Frecuentista (unmarked)"
+author: "Oscar Carmona Castro"
+date: "2025-04-10"
+output: html_document
+---
+
+# Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(unmarked)
+library(AICcmodavg)
+```
+
+
+# Cargar base de datos
+```{r}
+Carnivoros = readRDS("Datos_EAP/CarnivoreData.rds")
+```
+
+
+# Preparar base datos formato unmarked
+
+Preparar lista para cada una de las especies.
+
+**Variable "y".**
+```{r}
+y = list(lince = as.matrix(Carnivoros[ ,c("bobcat1","bobcat2",
+                                       "bobcat3")]),
+          coyote = as.matrix(Carnivoros[ ,c("coyote1","coyote2",
+                                       "coyote3")]),
+          zorro = as.matrix(Carnivoros[ ,c("redfox1","redfox2",
+                                       "redfox3")]))
+
+```
+
+**Variables de sitio.**
+```{r}
+site_cov = Carnivoros[ ,c("Dist_5km", "HDens_5km", "Trail")]
+```
+
+NOTA: En este caso no hay variables de detección, pero si las hubiera se podrían preparar para integrar al análisis.
+
+
+**Otra forma es escalonar variables para mejorar modelos (que no aparezcan NAs)**
+```{r}
+Dist <- scale(Carnivoros[,'Dist_5km'])
+HDens <- scale(Carnivoros[,'HDens_5km'])
+Trail <- Carnivoros[,'Trail']
+
+site_cov <- data.frame(Dist_5km = Dist,
+                       HDens_5km = HDens,
+                       Trail = Trail)
+
+```
+
+
+**unmarked frame.**
+```{r}
+Carnivoros_umf = unmarkedFrameOccuMulti(y = y,
+                                        siteCovs = site_cov)
+```
+
+```{r}
+summary(Carnivoros_umf)
+```
+
+```{r}
+plot(Carnivoros_umf)
+```
+
+
+# Ajustar modelo nulo con interacciones entre todas especies
+**Forma manual de generar el número de interacciones según el número de especies, en este caso las 3 especies: 6 combinaciones posibles.**
+```{r}
+det_formula_nulo = c("~1", "~1", "~1")
+occ_formula_nulo = c("~1", "~1", "~1", "~1", "~1", "~1", "~0" )
+```
+
+**Otra forma.**
+```{r}
+det_formula_nulo = rep("~1", 3)
+```
+
+```{r}
+occ_formula_nulo = c(rep("~1", 3),
+                     rep("~1", 3),
+                     "0")
+```
+
+
+**Luego crear modelo**
+```{r}
+Modelo_det_nulo = occuMulti(detformulas = det_formula_nulo,
+                            stateformulas = occ_formula_nulo,
+                            data = Carnivoros_umf)
+```
+
+```{r}
+Modelo_det_nulo
+```
+
+
+# Ajustar modelo sin interacciones
+```{r}
+det_formula_nulo_sin = rep("~1", 3)
+```
+
+```{r}
+occ_formula_nulo_sin = c(rep("~1", 3),
+                     rep(0, 3),
+                     0)
+```
+
+```{r}
+Modelo_det_nulo_sin = occuMulti(detformulas = det_formula_nulo_sin,
+                            stateformulas = occ_formula_nulo_sin,
+                            data = Carnivoros_umf)
+```
+
+```{r}
+Modelo_det_nulo_sin
+```
+
+
+# Ajustar modelo para interacción de dos especies
+```{r}
+det_formula_nulo_dosSp = rep("~1", 3)
+```
+
+```{r}
+occ_formula_nulo_dosSp = c(rep("~1", 3),
+                     0, "~1", 0,
+                     0)
+```
+
+```{r}
+Modelo_det_nulo_dosSp = occuMulti(detformulas = det_formula_nulo_dosSp,
+                            stateformulas = occ_formula_nulo_dosSp,
+                            data = Carnivoros_umf)
+```
+
+```{r}
+Modelo_det_nulo_dosSp
+```
+
+
+# Ajustar modelo ocupación - Dist_5km
+```{r}
+occ_formula_Dist = c(rep("~Dist_5km", 3),
+                     rep("~Dist_5km", 3),
+                     0)
+```
+
+```{r}
+occ_formula_Dist_Hdens = c(rep("~Dist_5km",3),
+                      rep("~Dist_5km",3),
+                      0)
+```
+
+```{r}
+Modelo_dist = occuMulti(detformulas = det_formula_nulo,
+                            stateformulas = occ_formula_Dist,
+                            data = Carnivoros_umf)
+```
+
+```{r}
+Modelo_dist_HDens = occuMulti(detformulas = det_formula_nulo,
+                            stateformulas = occ_formula_Dist_Hdens,
+                            data = Carnivoros_umf)
+```
+
+
+# Comparar modelos
+```{r}
+Modelos = list(Modelo_det_nulo, Modelo_dist, Modelo_dist_HDens)
+Nombres = c("Nulo", "Dist", "Dist + HDens")
+```
+
+```{r}
+aictab(Modelos, Nombres)
+```
+
+
+# Revisar si existe correlación entre variables Dist + DistHDens
+```{r}
+vif(Modelo_dist_HDens, type = "state")
+```
+
+**Valores de vif < 4, no hay colinealidad entre variables.**
+En caso de no poderse estimar por haber demasiados parámetros.
+
+
+**Otra forma.**
+```{r}
+cor.test(Carnivoros$Dist_5km, Carnivoros$HDens_5km)
+```
+
+**Valores de vif < 0.7, no hay colinealidad entre variables.**
+
+
+# Bondad de ajuste
+NO FUNCIONÓ - REVISAR EN GITHUB
+
+
+```{r}
+Modelo_dist_HDens
+```
+
+# Modelo a graficar
+```{r}
+Modelo_dist
+```
+
+
+
+# Predicciones - Ocupación Marginal
+Tabla perturbación
+```{r}
+Perturbacion_df = data.frame(Dist_5km = seq(min(Carnivoros$Dist_5km),
+                                            max(Carnivoros$Dist_5km),
+                                            length = 100))
+```
+
+```{r}
+head(Perturbacion_df)
+```
+
+Tabla coyote
+```{r}
+coyote_pre = predict(Modelo_dist, type = "state",
+                     species = c("coyote"),
+                     newdata = Perturbacion_df, appendData = TRUE,
+                     nsims = 1000)
+```
+
+```{r}
+coyote_pre$Perturbacion = Perturbacion_df$Dist_5km
+coyote_pre$Specie = "coyote"
+```
+
+```{r}
+head(coyote_pre)
+```
+
+
+Tabla lince
+```{r}
+lince_pre = predict(Modelo_dist, type = "state",
+                     species = c("lince"),
+                     newdata = Perturbacion_df, appendData = TRUE,
+                     nsims = 1000)
+```
+
+```{r}
+lince_pre$Perturbacion = Perturbacion_df$Dist_5km
+lince_pre$Specie = "lince"
+```
+
+```{r}
+head(lince_pre)
+```
+
+
+# Graficar "coyote"
+```{r}
+ggplot(coyote_pre, aes(x = Perturbacion, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5)
+  
+```
+
+
+Graficar lince
+```{r}
+ggplot(lince_pre, aes(x = Perturbacion, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5)
+  
+```
+
+
+Si quisieramos graficar las dos especies, primero se deben unir ambas tablas (rbind)
+```{r}
+Coyote_Lince_df = rbind(coyote_pre, lince_pre)
+```
+
+Luego graficar
+
+```{r}
+ggplot(Coyote_Lince_df, aes(x = Perturbacion, y = Predicted,
+                            color = Specie,
+                            fill = Specie)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5)
+  
+```
+
+
+# Predicción - Ocupación condicional
+"Lince" condicionado por la presencia del "coyote".
+```{r}
+lince_pre_con = predict(Modelo_dist, type = "state",
+                     species = c("lince"), cond = "coyote",
+                     newdata = Perturbacion_df, appendData = TRUE,
+                     nsims = 1000)
+```
+
+"Zorro" condicionado por la presencia del "coyote".
+```{r}
+zorro_pre_con = predict(Modelo_dist, type = "state",
+                     species = c("zorro"), cond = "coyote",
+                     newdata = Perturbacion_df, appendData = TRUE,
+                     nsims = 1000)
+```
+
+
+```{r}
+lince_pre_con$Perturbacion = Perturbacion_df$Dist_5km
+lince_pre_con$Specie = "lince"
+```
+
+```{r}
+zorro_pre_con$Perturbacion = Perturbacion_df$Dist_5km
+zorro_pre_con$Specie = "zorro"
+```
+
+
+```{r}
+head(lince_pre_con)
+```
+
+```{r}
+head(zorro_pre_con)
+```
+
+
+Unir tablas
+```{r}
+Lince_Zorro = rbind(lince_pre_con, zorro_pre_con)
+```
+
+
+Graficar Lince y Zorro condicionado por la presencia del "Coyote".
+```{r}
+ggplot(Lince_Zorro, aes(x = Perturbacion, y = Predicted,
+                        color = Specie, fill = Specie)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5)
+  
+```
+
+
+

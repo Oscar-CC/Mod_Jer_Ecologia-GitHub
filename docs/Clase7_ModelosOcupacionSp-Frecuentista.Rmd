@@ -1,0 +1,248 @@
+---
+title: "Clase 7: Modelos de ocupación de especies - Frecuentista"
+author: "Oscar Carmona Castro"
+date: "2025-04-08"
+output: html_document
+---
+
+**TAREA (correr scripts)**
+# Ocupación de especies con modelos Bayesiano en poblaciones cerradas (ubms)
+
+# Ocupación de especies con modelos Bayesiano en poblaciones cerradas (spOcupancy)
+
+
+# Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(unmarked)
+```
+
+
+# Cargar bases de datos
+```{r}
+Ardilla = readRDS("Datos_EAP/SwissSquirrels.rds")
+Bosque = readRDS("Datos_EAP/SuizaBosque.rds")
+```
+
+
+# Preparar formato unmarked
+**Variable "y".**
+```{r}
+y = Ardilla[ ,c("det071", "det072", "det073") ]
+```
+
+**Covariables de sitio.**
+```{r}
+Site_cov = Ardilla[ ,c("ele", "forest") ]
+```
+
+**Covariables de observación.**
+```{r}
+Obs_cov = list(Fecha = Ardilla [ ,c("date071", "date072", "date073")],
+               Dur = Ardilla [ ,c("dur071", "dur072", "dur073")])
+               
+```
+
+**Unmaked frame.**
+```{r}
+Ardilla_umf = unmarkedFrameOccu(y = y,
+                                siteCovs = Site_cov,
+                                obsCovs = Obs_cov)
+```
+
+```{r}
+Ardilla_umf
+```
+
+
+# Ajustar modelos de detección
+```{r}
+library(AICcmodavg)
+```
+
+```{r}
+Modelos_det = list(
+  Fecha = occu(~Fecha ~1, data = Ardilla_umf),
+  Dur = occu(~Dur ~1, data = Ardilla_umf),
+  Fecha_Dur = occu(~Fecha + Dur ~1, data = Ardilla_umf),
+  Nulo = occu(~1 ~1, data = Ardilla_umf),
+  
+  Fecha2 = occu(~Fecha + I(Fecha^2) ~1, data = Ardilla_umf)
+)
+```
+
+
+# Selección de modelos
+```{r}
+aictab(Modelos_det)
+```
+
+
+# Ajustar modelos de ocupación
+```{r}
+Modelos_occu = list(
+  Forest = occu(~Fecha + Dur ~forest, data = Ardilla_umf),
+  Ele = occu(~Fecha + Dur ~ele, data = Ardilla_umf),
+  Forest_ele = occu(~Fecha + Dur ~forest + ele, data = Ardilla_umf),
+  Nulo = occu(~Fecha + Dur ~1, data = Ardilla_umf)
+)
+```
+
+# Selección de modelos
+```{r}
+aictab(Modelos_occu)
+```
+
+
+# Validación de modelos
+```{r}
+AICcmodavg::mb.gof.test(Modelos_occu$Forest)
+```
+
+Error diferente cantidad de filas, posiblemente por NAs presentes.
+
+# Otra forma
+```{r}
+fitstats <- function(Mod_global2) {
+  observed <- getY(Mod_global2@data)
+  expected <- fitted(Mod_global2)
+  resids <- residuals(Mod_global2)
+  sse <- sum(resids^2,na.rm=TRUE)
+  chisq <- sum((observed - expected)^2 / expected,na.rm=TRUE)
+  freeTuke <- sum((sqrt(observed) - sqrt(expected))^2,na.rm=TRUE)
+  out <- c(SSE=sse, Chisq=chisq, freemanTukey=freeTuke)
+  return(out)
+}
+
+(pb <- parboot(Modelos_occu$Forest, fitstats, nsim=100, report=1))
+```
+
+Buen ajuste del modelo (Pr>0.05).
+
+
+# Graficar variable de detección
+Primero: preparar dos bases de datos.
+
+```{r}
+Fecha_df = data.frame(Fecha = seq(min(Ardilla$date071, na.rm = TRUE),
+                                  max(Ardilla$date073, na.rm = TRUE),
+                                  length = 100),
+                      Dur = mean(Ardilla$dur071, na.rm = TRUE))
+```
+
+```{r}
+Dur_df = data.frame(Dur = seq(min(Ardilla$dur071, na.rm = TRUE), 
+                              max(Ardilla$dur073, na.rm = TRUE),
+                                  length = 100),
+                      Fecha = mean(Ardilla$date071, na.rm = TRUE))
+```
+
+```{r}
+Fecha_pre = predict(Modelos_occu$Forest, type = "det",
+                  newdata = Fecha_df,
+                  appendData = TRUE)
+```
+
+```{r}
+Dur_pre = predict(Modelos_occu$Forest, type = "det",
+                  newdata = Dur_df,
+                  appendData = TRUE)
+```
+
+
+# Graficar
+```{r}
+ggplot(Fecha_pre, aes(x = Fecha, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5, fill = "lightblue") +
+  theme_classic()
+```
+
+```{r}
+ggplot(Dur_pre, aes(x = Dur, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5, fill = "lightblue") +
+  theme_classic()
+```
+
+
+# Graficar
+```{r}
+Bosque_df = data.frame(forest = seq(min(Ardilla$forest,
+                                        na.rm = TRUE), 
+                              max(Ardilla$forest, na.rm = TRUE),
+                                  length = 100))
+```
+
+```{r}
+Bosque_pre = predict(Modelos_occu$Forest, type = "state",
+                  newdata = Bosque_df,
+                  appendData = TRUE)
+```
+
+```{r}
+ggplot(Bosque_pre, aes(x = forest, y = Predicted)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = lower,
+                  ymax = upper),
+              alpha = 0.5, fill = "lightblue") +
+  theme_classic()
+```
+
+
+# Mapa de predicción
+Primero coordenadas
+```{r}
+head(Bosque)
+```
+
+
+```{r}
+Bosque_df = predict(Modelos_occu$Forest, newdata = Bosque,
+                    type = "state", appendData = TRUE)
+```
+
+
+```{r}
+library(raster)
+```
+
+Primero crear data frame.
+```{r}
+SuizaBosque = data.frame(x = Bosque_df$x,
+                         y = Bosque_df$y,
+                         z = Bosque_df$Predicted)
+```
+
+```{r}
+SuizaBosque_raster = rasterFromXYZ(SuizaBosque)
+```
+
+```{r}
+plot(SuizaBosque_raster)
+```
+
+```{r}
+library(ggthemes)
+```
+
+
+```{r}
+ggplot() +
+  geom_raster(data = SuizaBosque, aes(x = x,
+                                     y = y,
+                                     fill = z)) +
+  theme_map()
+  
+```
+
+
+
+
+
+
+

@@ -7,22 +7,22 @@ output: html_document
 
 ### **Índice de asignaciones.**
 
-[Asignación 1. Introducción a los Modelos Jerárquicos]()
+[Asignación 1. Introducción a los Modelos Jerárquicos](Asignacion1_IntroduccionModelosJerarquicos.html)
 
-[Asignación 2.1: N-Mixture Models - Frecuentista]()
+[Asignación 2.1: N-Mixture Models - Frecuentista](Asignacion2.1_N-MixtureModels-Frecuentista.html)
 
-[Asignación 2.2: N-Mixture Models - Bayesiano (ubms)]()
+[Asignación 2.2: N-Mixture Models - Bayesiano (ubms)](Asignacion2.2_N-MixtureModels-Bayesiano.html)
 
-[Asignación 2.3: N-Mixture Models - spAbundance]()
+[Asignación 2.3: N-Mixture Models - spAbundance](Asignacion2.3_N-MixtureModels_spAbundance.html)
 
-[Asignación 3.1: Modelos de densidad con muestreo de distancia jerárquico - Frecuentista]()
+[Asignación 3.1: Modelos de densidad con muestreo de distancia jerárquico - Frecuentista](Asignacion3.1_ModDen_MuestDistJer_Frecuentista.html)
 
-[Asignación 3.2: Modelos de densidad con muestreo de distancia jerárquico - Bayesiano]()
+[Asignación 3.2: Modelos de densidad con muestreo de distancia jerárquico - Bayesiano](Asignacion3.2_ModDen_MuestDistJer_Bayesiano.html)
 
-[Asignación 4.1: Modelos de ocupacion de especies - Frecuentista (unmarked)]()
+[Asignación 4.1: Modelos de ocupacion de especies - Frecuentista (unmarked)](Asignacion4.1_ModOcupSp-FrecuentistaUnmarked.html)
 
-[Asignación 4.2: Modelos de ocupacion de especies - Bayesiano (ubms)]()
+[Asignación 4.2: Modelos de ocupacion de especies - Bayesiano (ubms)](Asignacion4.2_ModOcupSp-Bayesiano_ubms.html)
 
-[Asignación 4.3: Modelos de ocupacion de especies - Bayesiano (spOccupancy)]()
+[Asignación 4.3: Modelos de ocupacion de especies - Bayesiano (spOccupancy)](Asignacion4.3_ModOcupSp-Bayesiano_spOccupancy.html)
 
 

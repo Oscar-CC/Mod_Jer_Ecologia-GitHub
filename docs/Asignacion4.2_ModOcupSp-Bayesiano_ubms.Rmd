@@ -1,0 +1,206 @@
+---
+title: "Asignación 4.2: Modelos de ocupacion de especies - Bayesiano (ubms)"
+author: "Oscar Carmona Castro"
+date: "2025-04-11"
+output: html_document
+---
+
+## Ejercicio: Realizar modelos de ocupación de especies (Bayesiano-unmarked).
+
+
+# { .tabset}
+
+
+## 1. Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(ubms)
+library(loo)
+```
+
+
+## 2. Cargar bases de datos
+```{r}
+ArdillaRoja = readRDS("Datos_EAP/SwissSquirrels.rds")
+```
+
+
+## 3. Preparar formato unmarked
+**Variable "y".**
+```{r}
+y = ArdillaRoja[,c("det071", "det072", "det073")]
+```
+
+**Covariables de sitio.**
+```{r}
+SiteCov = ArdillaRoja[,c("ele", "forest")]
+```
+
+**Covariables de observación.**
+```{r}
+ObsCov = list(Fecha = ArdillaRoja[,c("date071", "date072", "date073")],
+               Dur = ArdillaRoja[,c("dur071", "dur072", "dur073")])
+               
+```
+
+
+## 4. Preparar tabla unmarked
+```{r}
+Ardillas_umf = unmarkedFrameOccu(y = y, siteCovs = SiteCov, 
+                                    obsCovs= ObsCov)
+
+summary(Ardillas_umf)
+```
+
+
+## 5. Ajustar modelos de detección
+```{r}
+ModelDet0 = stan_occu(~1 ~1, Ardillas_umf,
+                      chains = 3, iter= 300, warmup = 30) 
+
+ModelDet1 = stan_occu(~Fecha ~1, Ardillas_umf,
+                      chains = 3, iter= 300, warmup = 30)
+
+ModelDet2 = stan_occu(~Dur ~1, Ardillas_umf,
+                      chains = 3, iter= 300, warmup = 30)
+
+ModelDet3 = stan_occu(~Fecha + Dur ~1, Ardillas_umf,
+                      chains = 3, iter= 300, warmup = 30)
+```
+
+
+## 6. Selección de modelos de detección
+
+Error al aplicar "waic":
+**Error en UseMethod("waic"): no applicable method for 'waic' applied to an object of class "PGOcc"**
+
+* waic(ModelDet0)
+* waic(ModelDet1)
+* waic(ModelDet2)
+* waic(ModelDet3)
+
+
+
+
+## 7. Ajustar modelos de ocupación
+```{r}
+ModelOccu0 = stan_occu(~Dur ~ 1, Ardillas_umf,
+                      chains = 3, iter= 300, warmup = 30) 
+
+ModelOccu1 = stan_occu(~Dur ~ ele, Ardillas_umf,
+                      chains = 3, iter= 300, warmup = 30)
+
+ModelOccu2 = stan_occu(~Dur ~ forest, Ardillas_umf,
+                      chains = 3, iter= 300, warmup = 30)
+```
+
+
+## 8. Selección de modelos de ocupación
+
+Error al aplicar "waic":
+**Error en UseMethod("waic"): no applicable method for 'waic' applied to an object of class "PGOcc"**
+
+* waic(ModelOccu0)
+* waic(ModelOccu1)
+* waic(ModelOccu2)
+
+
+## 9. Resumen de resultados
+```{r}
+ModelOccu2
+```
+
+
+## 10. Prueba de bondad de ajuste
+```{r}
+traceplot(ModelOccu2)
+```
+
+
+## 11. Preparar para graficar
+```{r}
+Forest = data.frame(forest = seq(min(ArdillaRoja$forest, na.rm = TRUE), max(ArdillaRoja$forest, na.rm = TRUE), length.out = 100))
+```
+
+```{r}
+Forest_pre = predict(ModelOccu2, newdata =Forest, submodel = "state")
+```
+
+```{r}
+Forest_pre = Forest_pre %>% 
+  mutate(forest = Forest$forest) %>% 
+  rename(lower = `2.5%`,
+         upper = `97.5%`)
+```
+
+
+## 12. Graficar modelo ocupación
+```{r}
+ggplot(data= Forest_pre, aes(x= forest, y= Predicted))+
+  geom_ribbon(aes(ymin= lower,
+                  ymax= upper), fill = "lightblue") +
+  geom_line(color= "black") +
+  labs(x = "Cobertura boscosa", 
+       y = expression(paste("Probabilidad de ocupancia (", psi, ")", sep = "")))+
+  ggtitle("Ocupancia de Ardilla Roja") +
+  theme_classic()
+```
+
+
+## 13. Mapa distribución
+```{r}
+SuizaBosque = readRDS("Datos_EAP/SuizaBosque.rds")
+```
+
+```{r}
+SuizaBosque_pre = predict(ModelOccu2, submodel = "state", newdata = SuizaBosque,
+                           appendData = TRUE)
+```
+
+```{r}
+SuizaBosque_pre = SuizaBosque_pre %>% 
+  mutate(x = SuizaBosque$x,
+         y = SuizaBosque$y,
+         elevation = SuizaBosque$elevation,
+         Forest = SuizaBosque$forest)
+```
+
+```{r}
+library(raster)
+```
+
+```{r}
+SuizaBosque_raster = data.frame(x= SuizaBosque_pre$x,
+                                 y = SuizaBosque_pre$y,
+                                 z = SuizaBosque_pre$Predicted)
+```
+
+```{r}
+SuizaBosque_raster <- rasterFromXYZ(SuizaBosque_raster)
+```
+
+```{r}
+plot(SuizaBosque_raster)
+```
+
+
+```{r}
+SuizaBosque_raster_df = as.data.frame(SuizaBosque_raster, xy = TRUE)
+```
+
+```{r}
+library(ggthemes)
+```
+
+```{r}
+ggplot() +
+  geom_raster(data = SuizaBosque_raster_df, aes(x = x, y = y, fill = z)) +
+  theme_map() +
+  scale_fill_viridis_b(na.value = "white") +
+  labs(fill = "Ocupación")
+```
+
+
+
+
+

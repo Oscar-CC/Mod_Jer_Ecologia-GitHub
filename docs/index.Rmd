@@ -5,7 +5,7 @@ date: "2025-04-07"
 output: html_document
 ---
 
-### **Índice de asignaturas.**
+### **Índice de asignaciones.**
 
 [Asignación 1. Introducción a los Modelos Jerárquicos]()
 
@@ -13,8 +13,16 @@ output: html_document
 
 [Asignación 2.2: N-Mixture Models - Bayesiano (ubms)]()
 
-[Asignación 3: N-Mixture Models - spAbundance]()
+[Asignación 2.3: N-Mixture Models - spAbundance]()
 
-[]()
+[Asignación 3.1: Modelos de densidad con muestreo de distancia jerárquico - Frecuentista]()
 
-[]()
+[Asignación 3.2: Modelos de densidad con muestreo de distancia jerárquico - Bayesiano]()
+
+[Asignación 4.1: Modelos de ocupacion de especies - Frecuentista (unmarked)]()
+
+[Asignación 4.2: Modelos de ocupacion de especies - Bayesiano (ubms)]()
+
+[Asignación 4.3: Modelos de ocupacion de especies - Bayesiano (spOccupancy)]()
+
+

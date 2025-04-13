@@ -1,0 +1,248 @@
+---
+title: "Asignación 2.3: N-Mixture Models - spAbundance"
+author: "Oscar Carmona Castro"
+date: "2025-04-03"
+output: html_document
+---
+
+## Ejercicio: Crear datos para predicción (**paso 9**) y realizar predicciones (**paso 10**).
+
+
+# { .tabset}
+
+
+## 1. Cargar paquetes
+```{r, message=FALSE, warning=FALSE}
+library(spAbundance)
+library(tidyverse)
+library(unmarked)
+```
+
+
+## 2. Cargar base de datos
+```{r}
+Carbonero = read.csv("Datos_EAP/Tits.csv")
+```
+
+```{r}
+str(Carbonero)
+```
+
+
+## 3. Formatear base datos: spAbundance
+
+**Crear matriz para variable "y".**
+```{r}
+y = as.matrix(Carbonero[ , c("X1", "X2", "X3")])
+```
+
+
+**Covariables de sitio**
+```{r}
+Site_covs = Carbonero[ , c("forest", "elev")]
+```
+
+
+**Covariables de observación.**
+```{r}
+Obs_covs = list(det.cov.1 = as.matrix(Carbonero[ , c("time.1", "time.2", "time.3")]),
+                det.cov.2 = as.matrix(Carbonero[ , c("date.1", "date.2", "date.3")]),
+                det.cov.2 = as.matrix(Carbonero[ , c("dur.1", "dur.2", "dur.3")]))
+                
+```
+
+```{r}
+Carbonero_data = list(y = y,
+                       abund.covs = Site_covs,
+                       det.covs = Obs_covs)
+
+```
+
+```{r}
+View(Carbonero_data)
+```
+
+
+## 4. Configurar Cadenas Montecarlo: MCMC
+```{r}
+n_chains = 3
+n_burn = 500
+n_thin = 5
+n_iter = 5000
+```
+
+
+## 5. Ajustar modelos de detección { .tabset}
+### 5.1 Modelo de detección nulo
+
+```{r}
+modelo_det_nulo = NMix(abund.formula = ~1,
+                       det.formula = ~1,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+### 5.2 Modelo de detección fecha
+**Seleccionamos una variable detección para ejemplo: Fecha (det.cov.2)**
+```{r}
+modelo_det_fecha = NMix(abund.formula = ~1,
+                       det.formula = ~det.cov.2,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+### 5.3 Selección de modelos de detección: waic
+**Entre menor sea el valor, el modelo es mejor.**
+```{r}
+waicAbund(modelo_det_nulo)
+```
+
+```{r}
+waicAbund(modelo_det_fecha)
+```
+
+Para este ejemplo, el mejor modelo de detección es el nulo (elpd = -1799.86 WAIC = 3606.59).
+
+
+## 6. Ajustar modelos de abundancia { .tabset} 
+### 6.1 Modelo de abundancia nulo
+```{r}
+modelo_abun_nulo = NMix(abund.formula = ~1,
+                       det.formula = ~det.cov.2,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+### 6.2 Modelo de abundancia y bosque
+```{r}
+modelo_abun_forest = NMix(abund.formula = ~forest,
+                       det.formula = ~det.cov.2,
+                       data = Carbonero_data,
+                       family = "NB",
+                       n.batch = 500,
+                       batch.length = 10,
+                       n.chains = n_chains,
+                       n.burn = n_burn,
+                       n.thin = n_thin,
+                       n_iter = n_iter)
+```
+
+
+### 6.3 Selección de modelos de detección: waic
+
+```{r}
+waicAbund(modelo_abun_nulo)
+```
+
+```{r}
+waicAbund(modelo_abun_forest)
+```
+
+Para este ejemplo, el mejor modelo de abundancia es el nulo (elpd = -1910.72, WAIC = 3902.40).
+
+
+## 7. Resumen  de resultados
+Utilizaremos el modelo abundancia y bosque, solo como ejemplo.
+
+```{r}
+summary(modelo_abun_forest)
+```
+
+
+## 8. Diagnosticar la convergencia
+```{r}
+plot(modelo_abun_forest$beta.samples)
+```
+
+```{r}
+plot(modelo_abun_forest$alpha.samples)
+```
+
+```{r}
+Ajuste_test = ppcAbund(modelo_abun_forest, fit.stat = "freeman-tukey", group = 1)
+```
+
+```{r}
+summary(Ajuste_test)
+```
+
+**Un modelo es adecuado cuando:**
+* Rhat < 1.05
+* Gráficos (revisión)
+* p-bayesiano > 0.05
+
+Si falla alguno de ellos no se justifica entregar esos resultados.
+
+
+## 9. Crear datos para predicción
+```{r}
+forest.pred <- data.frame(forest = seq(min(Carbonero$forest, na.rm = TRUE), 
+                                       max(Carbonero$forest, na.rm = TRUE), 
+                                       length.out = 100))
+```
+
+```{r}
+X.0 <- model.matrix(~forest, data = forest.pred)
+```
+
+
+## 10. Realizar predicciones
+```{r}
+out.forest <- predict(modelo_abun_forest, X.0 = X.0, type = "abundance")
+```
+
+```{r}
+psi.0.quants <- apply(out.forest$mu.0.samples, 2, quantile, c(0.025, 0.5, 0.975))
+```
+
+
+**First, convert your quantile matrix to a tidy data frame**
+```{r}
+psi_df <- as.data.frame(t(psi.0.quants)) %>% 
+  tibble::rownames_to_column("forest") %>% 
+  mutate(forest = as.numeric(forest)) %>% 
+  pivot_longer(cols = -forest, names_to = "quantile", values_to = "value") %>% 
+  pivot_wider(names_from = quantile, values_from = value)
+```
+
+**Create the plot**
+```{r}
+ggplot(psi_df, aes(x = forest)) +
+  geom_ribbon(aes(ymin = `2.5%`, ymax = `97.5%`), 
+              fill = "#4E79A7", alpha = 0.3) +
+  geom_line(aes(y = `50%`), color = "#2E5C8A", linewidth = 1) +
+  labs(
+    x = "Forest cover",
+    y = "Abundance (ψ)",
+    title = "Estimated Abundance",
+    subtitle = "Median with 95% credible intervals"
+  ) +
+  scale_x_continuous(breaks = seq(0, 100, by = 10)) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 14),
+    plot.subtitle = element_text(color = "gray40"),
+    axis.title = element_text(face = "bold")
+  )
+```
+
+
